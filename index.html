@@ -1,10 +1,73 @@
-LeFil/
-│
-├── index.html
-├── update.py
-├── requirements.txt
-├── data.json
-│
-└── .github/
-    └── workflows/
-        └── lefil.yml
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Le Fil">
+<title>Le Fil</title>
+<style>
+:root{--bg:#111;--card:#2b2b2b;--ink:#f2f2f2;--mut:#a5a5a5;--blue:#0d3a73;--sun:#ffd23f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.35 -apple-system,system-ui,'Segoe UI',sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{background:linear-gradient(#0f4a93,#0a2a55);padding:calc(10px + env(safe-area-inset-top)) 14px 10px;text-align:center;position:sticky;top:0;z-index:5}
+header h1{margin:0;font:800 1.5rem/1.2 'Arial Narrow',Impact,sans-serif;letter-spacing:.02em}
+.tabs{display:flex;background:#555}
+.tabs button{flex:1;padding:12px;border:0;background:none;color:#ddd;font-weight:600;font-size:1rem;font-family:inherit}
+.tabs button[aria-selected=true]{color:#fff;box-shadow:inset 0 -3px var(--sun)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 14px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid #444;background:#1c1c1c;color:var(--ink);border-radius:99px;padding:7px 13px;font:inherit;font-size:.9rem}
+.chip[aria-pressed=true]{background:var(--sun);color:#111;border-color:var(--sun)}
+main{padding:0 14px 30px;display:grid;gap:14px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid #3a3a3a;overflow:hidden}
+.card a{color:inherit;text-decoration:none;display:block}
+.card img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#333}
+.body{padding:12px 14px}
+.when{color:var(--mut);font-size:.85rem}
+.card h2{font-size:1.2rem;line-height:1.25;margin:4px 0 8px;font-weight:600}
+.foot{display:flex;justify-content:space-between;align-items:center;color:var(--mut)}
+.star{background:none;border:0;color:var(--mut);font-size:1.5rem;padding:4px 8px;margin:-4px -8px}
+.star[aria-pressed=true]{color:var(--sun)}
+.msg{color:var(--mut);text-align:center;padding:30px 10px}
+.stat{color:var(--mut);font-size:.85rem;padding:0 14px 30px;max-width:640px;margin:0 auto}
+.stat summary{cursor:pointer}.stat li{margin:3px 0}
+:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+</style></head><body>
+<header><h1>LE FIL</h1></header>
+<div class="tabs" role="tablist">
+<button role="tab" id="tu" aria-selected="true">À la une</button>
+<button role="tab" id="ts" aria-selected="false">Ma sélection ★</button></div>
+<div class="chips" id="chips"></div>
+<main id="list"></main>
+<div class="stat" id="stat"></div>
+<script>
+const THEMES=[["climat","Climat"],["droits","Droits humains"],["inter","International"],["societe","Société"],["eco","Économie"],["local","Local"],["alerte","Lanceurs d’alerte"]];
+let DATA={items:[],status:[]},theme=null,tab="u";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let saved=[];try{saved=JSON.parse(localStorage.getItem("lefil-saved")||"[]")}catch(e){}
+const persist=()=>{try{localStorage.setItem("lefil-saved",JSON.stringify(saved))}catch(e){}};
+function when(iso){const d=new Date(iso),n=new Date(),h=d.getHours()+"h"+String(d.getMinutes()).padStart(2,"0");
+ const day=x=>x.toDateString();const y=new Date(n);y.setDate(n.getDate()-1);
+ if(day(d)==day(n))return"Aujourd'hui à "+h;if(day(d)==day(y))return"Hier à "+h;
+ return d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})+" à "+h}
+function render(){
+ $("#chips").innerHTML=`<button class="chip" data-t="" aria-pressed="${!theme}">Tout</button>`+THEMES.map(([k,l])=>`<button class="chip" data-t="${k}" aria-pressed="${theme===k}">${l}</button>`).join("");
+ let items=tab==="s"?saved:DATA.items;
+ if(theme)items=items.filter(i=>(i.themes||[]).includes(theme));
+ if(!items.length){$("#list").innerHTML=`<p class="msg">${tab==="s"?"Touchez ☆ sur un article pour le retrouver ici.":"Aucun article pour le moment."}</p>`;return}
+ $("#list").innerHTML=items.map(i=>{const on=saved.some(s=>s.link===i.link);
+  return`<article class="card"><a href="${esc(i.link)}" target="_blank" rel="noopener">${i.image?`<img src="${esc(i.image)}" alt="" loading="lazy" onerror="this.remove()">`:""}
+  <div class="body"><div class="when">${when(i.date)}</div><h2>${esc(i.title)}</h2></div></a>
+  <div class="body foot" style="padding-top:0"><span>${esc(i.source)}</span><button class="star" data-l="${esc(i.link)}" aria-pressed="${on}" aria-label="Ajouter à ma sélection">${on?"★":"☆"}</button></div></article>`}).join("")}
+document.addEventListener("click",e=>{const c=e.target.closest("button");if(!c)return;
+ if(c.id==="tu"||c.id==="ts"){tab=c.id==="ts"?"s":"u";$("#tu").setAttribute("aria-selected",tab==="u");$("#ts").setAttribute("aria-selected",tab==="s");render();scrollTo(0,0)}
+ else if(c.dataset.t!==undefined){theme=c.dataset.t||null;render()}
+ else if(c.dataset.l){const l=c.dataset.l,k=saved.findIndex(s=>s.link===l);
+  if(k>=0)saved.splice(k,1);else{const it=DATA.items.find(i=>i.link===l);if(it)saved.unshift(it)}
+  persist();render()}});
+fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{DATA=d;render();
+ const ok=d.status.filter(s=>s.ok).length;
+ $("#stat").innerHTML=`<details><summary>Mis à jour ${when(d.updated).toLowerCase()} · ${ok} flux sur ${d.status.length}</summary><ul>${d.status.map(s=>`<li>${s.ok?"✅":"❌"} ${esc(s.name)} (${s.count})</li>`).join("")}</ul></details>`})
+ .catch(()=>{$("#list").innerHTML='<p class="msg">Pas encore de données. Lancez la mise à jour dans l’onglet Actions de GitHub.</p>'});
+render();
+</script></body></html>
