@@ -14,11 +14,15 @@ header h1{position:relative;margin:0;font:800 1.7rem/1.2 'Arial Narrow',Impact,s
 .tabs{display:flex;background:#2a2655}
 .tabs button{flex:1;padding:12px;border:0;background:none;color:#ddd;font-weight:600;font-size:1rem;font-family:inherit}
 .tabs button[aria-selected=true]{color:#fff;box-shadow:inset 0 -3px #ff4d6d}
-.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 14px;scrollbar-width:none}
+.search{padding:12px 14px 0;max-width:640px;margin:0 auto}
+.search input{width:100%;font:inherit;padding:11px 16px;border-radius:99px;border:1px solid #444;background:#1c1c1c;color:var(--ink)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:10px 14px 2px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;border:1px solid #444;background:#1c1c1c;color:var(--ink);border-radius:99px;padding:7px 13px;font:inherit;font-size:.9rem}
+.chips.k .chip{font-size:.8rem;padding:5px 11px;color:var(--mut)}
 .chip[aria-pressed=true]{background:#8C7BFF;color:#fff;border-color:#8C7BFF}
-main{padding:0 14px 30px;display:grid;gap:14px;max-width:640px;margin:0 auto}
+.count{color:var(--mut);font-size:.82rem;padding:10px 16px 0;max-width:640px;margin:0 auto}
+main{padding:12px 14px 30px;display:grid;gap:14px;max-width:640px;margin:0 auto}
 .card{background:var(--card);border:0;border-radius:22px;overflow:hidden}
 .card a{color:inherit;text-decoration:none;display:block}
 .card img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#333}
@@ -37,38 +41,47 @@ main{padding:0 14px 30px;display:grid;gap:14px;max-width:640px;margin:0 auto}
 <div class="tabs" role="tablist">
 <button role="tab" id="tu" aria-selected="true">À la une</button>
 <button role="tab" id="ts" aria-selected="false">Ma sélection ★</button></div>
+<div class="search"><input id="q" type="search" placeholder="Rechercher un mot, un sujet, un média…" aria-label="Rechercher"></div>
 <div class="chips" id="chips"></div>
+<div class="chips k" id="kinds"></div>
+<div class="count" id="count"></div>
 <main id="list"></main>
 <div class="stat" id="stat"></div>
 <script>
-const THEMES=[["climat","Climat"],["droits","Droits humains"],["inter","International"],["societe","Société"],["eco","Économie"],["local","Local"],["alerte","Lanceurs d’alerte"]];
-let DATA={items:[],status:[]},theme=null,tab="u";
+let DATA={items:[],status:[],themes:[],kinds:[]},theme=null,kind=null,q="",tab="u";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const norm=s=>String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 let saved=[];try{saved=JSON.parse(localStorage.getItem("lefil-saved")||"[]")}catch(e){}
 const persist=()=>{try{localStorage.setItem("lefil-saved",JSON.stringify(saved))}catch(e){}};
 function when(iso){const d=new Date(iso),n=new Date(),h=d.getHours()+"h"+String(d.getMinutes()).padStart(2,"0");
  const day=x=>x.toDateString();const y=new Date(n);y.setDate(n.getDate()-1);
  if(day(d)==day(n))return"Aujourd'hui à "+h;if(day(d)==day(y))return"Hier à "+h;
  return d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"})+" à "+h}
+function chips(){
+ $("#chips").innerHTML=`<button class="chip" data-t="" aria-pressed="${!theme}">Tous les thèmes</button>`+DATA.themes.map(([k,l])=>`<button class="chip" data-t="${k}" aria-pressed="${theme===k}">${esc(l)}</button>`).join("");
+ $("#kinds").innerHTML=`<button class="chip" data-k="" aria-pressed="${!kind}">Toutes les sources</button>`+DATA.kinds.map(k=>`<button class="chip" data-k="${esc(k)}" aria-pressed="${kind===k}">${esc(k)}</button>`).join("")}
 function render(){
- $("#chips").innerHTML=`<button class="chip" data-t="" aria-pressed="${!theme}">Tout</button>`+THEMES.map(([k,l])=>`<button class="chip" data-t="${k}" aria-pressed="${theme===k}">${l}</button>`).join("");
  let items=tab==="s"?saved:DATA.items;
  if(theme)items=items.filter(i=>(i.themes||[]).includes(theme));
- if(!items.length){$("#list").innerHTML=`<p class="msg">${tab==="s"?"Touchez ☆ sur un article pour le retrouver ici.":"Aucun article pour le moment."}</p>`;return}
- $("#list").innerHTML=items.map(i=>{const on=saved.some(s=>s.link===i.link);
+ if(kind)items=items.filter(i=>i.kind===kind);
+ if(q){const w=norm(q).split(/\s+/).filter(Boolean);items=items.filter(i=>{const t=norm(i.title+" "+i.source);return w.every(x=>t.includes(x))})}
+ $("#count").textContent=items.length+" article"+(items.length>1?"s":"");
+ if(!items.length){$("#list").innerHTML=`<p class="msg">${tab==="s"?"Touchez ☆ sur un article pour le retrouver ici.":"Aucun article pour ces filtres."}</p>`;return}
+ $("#list").innerHTML=items.slice(0,120).map(i=>{const on=saved.some(s=>s.link===i.link);
   return`<article class="card"><a href="${esc(i.link)}" target="_blank" rel="noopener">${i.image?`<img src="${esc(i.image)}" alt="" loading="lazy" onerror="this.remove()">`:""}
   <div class="body"><div class="when">${when(i.date)}</div><h2>${esc(i.title)}</h2></div></a>
   <div class="body foot" style="padding-top:0"><span>${esc(i.source)}</span><button class="star" data-l="${esc(i.link)}" aria-pressed="${on}" aria-label="Ajouter à ma sélection">${on?"★":"☆"}</button></div></article>`}).join("")}
 document.addEventListener("click",e=>{const c=e.target.closest("button");if(!c)return;
  if(c.id==="tu"||c.id==="ts"){tab=c.id==="ts"?"s":"u";$("#tu").setAttribute("aria-selected",tab==="u");$("#ts").setAttribute("aria-selected",tab==="s");render();scrollTo(0,0)}
- else if(c.dataset.t!==undefined){theme=c.dataset.t||null;render()}
+ else if(c.dataset.t!==undefined){theme=c.dataset.t||null;chips();render()}
+ else if(c.dataset.k!==undefined){kind=c.dataset.k||null;chips();render()}
  else if(c.dataset.l){const l=c.dataset.l,k=saved.findIndex(s=>s.link===l);
   if(k>=0)saved.splice(k,1);else{const it=DATA.items.find(i=>i.link===l);if(it)saved.unshift(it)}
   persist();render()}});
-fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{DATA=d;render();
+$("#q").addEventListener("input",e=>{q=e.target.value.trim();render()});
+fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{DATA=d;chips();render();
  const ok=d.status.filter(s=>s.ok).length;
- $("#stat").innerHTML=`<details><summary>Mis à jour ${when(d.updated).toLowerCase()} · ${ok} flux sur ${d.status.length}</summary><ul>${d.status.map(s=>`<li>${s.ok?"✅":"❌"} ${esc(s.name)} (${s.count})</li>`).join("")}</ul></details>`})
+ $("#stat").innerHTML=`<details><summary>Mis à jour ${when(d.updated).toLowerCase()} · ${ok} sources sur ${d.status.length}</summary><ul>${d.status.map(s=>`<li>${s.ok?"✅":"❌"} ${esc(s.name)} (${s.count})</li>`).join("")}</ul></details>`})
  .catch(()=>{$("#list").innerHTML='<p class="msg">Pas encore de données. Lancez la mise à jour dans l’onglet Actions de GitHub.</p>'});
-render();
 </script></body></html>
