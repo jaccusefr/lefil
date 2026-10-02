@@ -35,6 +35,22 @@ main{padding:12px 14px 30px;display:grid;gap:14px;max-width:640px;margin:0 auto}
 .msg{color:var(--mut);text-align:center;padding:30px 10px}
 .stat{color:var(--mut);font-size:.85rem;padding:0 14px 30px;max-width:640px;margin:0 auto}
 .stat summary{cursor:pointer}.stat li{margin:3px 0}
+.extra{border-top:1px solid #3a3a3a;display:grid;gap:10px}
+.tg{display:flex;flex-wrap:wrap;gap:6px}
+.tg button{border:1px solid #555;background:none;color:var(--mut);border-radius:99px;padding:5px 11px;font:inherit;font-size:.8rem}
+.tg button[aria-pressed=true]{background:#ff4d6d;border-color:#ff4d6d;color:#fff}
+.note{width:100%;min-height:84px;font:inherit;font-size:.95rem;padding:10px 12px;border-radius:12px;border:1px solid #555;background:#1c1c1c;color:var(--ink);resize:vertical}
+.acts{display:flex;gap:8px}
+.acts button,.tools button{flex:1;border:0;border-radius:99px;padding:10px 12px;font:inherit;font-weight:600;font-size:.9rem;background:#8C7BFF;color:#fff}
+.acts button.alt,.tools button.alt{background:#3a3a3a}
+.tools{display:flex;gap:8px;padding:12px 14px 0;max-width:640px;margin:0 auto}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:20;display:none;align-items:flex-end;justify-content:center}
+.ov.on{display:flex}
+.sheet{background:#1f1d3a;width:100%;max-width:640px;border-radius:22px 22px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));display:grid;gap:12px}
+.sheet h3{margin:0}
+.sheet textarea{min-height:200px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom));background:#fff;color:#111;padding:10px 18px;border-radius:99px;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30}
+.toast.on{opacity:1}
 :focus-visible{outline:3px solid var(--sun);outline-offset:2px}
 </style></head><body>
 <header><img src="IMG_2453.png" alt=""><h1>J’accuse : Le fil</h1></header>
@@ -44,16 +60,33 @@ main{padding:12px 14px 30px;display:grid;gap:14px;max-width:640px;margin:0 auto}
 <div class="search"><input id="q" type="search" placeholder="Rechercher un mot, un sujet, un média…" aria-label="Rechercher"></div>
 <div class="chips" id="chips"></div>
 <div class="chips k" id="kinds"></div>
+<div class="chips k" id="tagrow" hidden></div>
+<div class="tools" id="tools" hidden><button id="exMd">Exporter (.md)</button><button class="alt" id="exCp">Copier l’export</button></div>
 <div class="count" id="count"></div>
 <main id="list"></main>
 <div class="stat" id="stat"></div>
+<div class="ov" id="ov"><div class="sheet"><h3>Fiche post</h3><textarea class="note" id="pt"></textarea><div class="acts"><button id="ptCp">Copier</button><button class="alt" id="ptX">Fermer</button></div></div></div>
+<div class="toast" id="toast" role="status"></div>
 <script>
-let DATA={items:[],status:[],themes:[],kinds:[]},theme=null,kind=null,q="",tab="u";
+const TAGS=["À vérifier","Post prêt","Article de réponse","Chiffre clé"];
+let DATA={items:[],status:[],themes:[],kinds:[]},theme=null,kind=null,tagF=null,q="",tab="u";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const norm=s=>String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-let saved=[];try{saved=JSON.parse(localStorage.getItem("lefil-saved")||"[]")}catch(e){}
-const persist=()=>{try{localStorage.setItem("lefil-saved",JSON.stringify(saved))}catch(e){}};
+let saved=(()=>{let a=null;try{a=JSON.parse(localStorage.getItem("lefil-notes")||"null")}catch(e){}
+ if(!a){try{a=JSON.parse(localStorage.getItem("lefil-saved")||"[]").map(i=>({...i,note:"",tags:[]}))}catch(e){a=[]}}
+ return a||[]})();
+const persist=()=>{try{localStorage.setItem("lefil-notes",JSON.stringify(saved))}catch(e){}};
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove("on"),2000)}
+async function copy(txt){try{await navigator.clipboard.writeText(txt);toast("Copié")}catch(e){const a=document.createElement("textarea");a.value=txt;document.body.appendChild(a);a.select();try{document.execCommand("copy");toast("Copié")}catch(x){toast("Copie impossible")}a.remove()}}
+const find=l=>saved.find(s=>s.link===l);
+const dstr=iso=>new Date(iso).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
+function cite(i){return i.title+" — "+i.source+", "+dstr(i.date)+". "+i.link}
+function draft(i){return(i.note?i.note+"\n\n":"")+"📰 "+i.title+"\nSource : "+i.source+", "+dstr(i.date)+"\n🔗 "+i.link}
+function exportMd(){const L=["# J’accuse : Le fil — export du "+dstr(new Date().toISOString()),""];
+ saved.forEach(i=>{L.push("## "+i.title,"- Source : "+i.source+" ("+dstr(i.date)+")","- Lien : "+i.link);
+  if((i.tags||[]).length)L.push("- Étiquettes : "+i.tags.join(", "));if(i.note)L.push("- Note : "+i.note.replace(/\n/g,"\n  "));L.push("")});
+ return L.join("\n")}
 function when(iso){const d=new Date(iso),n=new Date(),h=d.getHours()+"h"+String(d.getMinutes()).padStart(2,"0");
  const day=x=>x.toDateString();const y=new Date(n);y.setDate(n.getDate()-1);
  if(day(d)==day(n))return"Aujourd'hui à "+h;if(day(d)==day(y))return"Hier à "+h;
@@ -62,22 +95,37 @@ function chips(){
  $("#chips").innerHTML=`<button class="chip" data-t="" aria-pressed="${!theme}">Tous les thèmes</button>`+DATA.themes.map(([k,l])=>`<button class="chip" data-t="${k}" aria-pressed="${theme===k}">${esc(l)}</button>`).join("");
  $("#kinds").innerHTML=`<button class="chip" data-k="" aria-pressed="${!kind}">Toutes les sources</button>`+DATA.kinds.map(k=>`<button class="chip" data-k="${esc(k)}" aria-pressed="${kind===k}">${esc(k)}</button>`).join("")}
 function render(){
+ $("#tools").hidden=$("#tagrow").hidden=tab!=="s";
+ if(tab==="s")$("#tagrow").innerHTML=`<button class="chip" data-f="" aria-pressed="${!tagF}">Toutes les étiquettes</button>`+TAGS.map(t=>`<button class="chip" data-f="${esc(t)}" aria-pressed="${tagF===t}">${esc(t)}</button>`).join("");
  let items=tab==="s"?saved:DATA.items;
+ if(tab==="s"&&tagF)items=items.filter(i=>(i.tags||[]).includes(tagF));
  if(theme)items=items.filter(i=>(i.themes||[]).includes(theme));
  if(kind)items=items.filter(i=>i.kind===kind);
- if(q){const w=norm(q).split(/\s+/).filter(Boolean);items=items.filter(i=>{const t=norm(i.title+" "+i.source);return w.every(x=>t.includes(x))})}
+ if(q){const w=norm(q).split(/\s+/).filter(Boolean);items=items.filter(i=>{const t=norm(i.title+" "+i.source+" "+(i.note||""));return w.every(x=>t.includes(x))})}
  $("#count").textContent=items.length+" article"+(items.length>1?"s":"");
  if(!items.length){$("#list").innerHTML=`<p class="msg">${tab==="s"?"Touchez ☆ sur un article pour le retrouver ici.":"Aucun article pour ces filtres."}</p>`;return}
  $("#list").innerHTML=items.slice(0,120).map(i=>{const on=saved.some(s=>s.link===i.link);
   return`<article class="card"><a href="${esc(i.link)}" target="_blank" rel="noopener">${i.image?`<img src="${esc(i.image)}" alt="" loading="lazy" onerror="this.remove()">`:""}
   <div class="body"><div class="when">${when(i.date)}</div><h2>${esc(i.title)}</h2></div></a>
-  <div class="body foot" style="padding-top:0"><span>${esc(i.source)}</span><button class="star" data-l="${esc(i.link)}" aria-pressed="${on}" aria-label="Ajouter à ma sélection">${on?"★":"☆"}</button></div></article>`}).join("")}
+  <div class="body foot" style="padding-top:0"><span>${esc(i.source)}</span><button class="star" data-l="${esc(i.link)}" aria-pressed="${on}" aria-label="Ajouter à ma sélection">${on?"★":"☆"}</button></div>${tab==="s"?extra(i):""}</article>`}).join("")}
+function extra(i){const l=esc(i.link);return`<div class="body extra"><div class="tg">${TAGS.map(t=>`<button data-g="${l}" data-tag="${esc(t)}" aria-pressed="${(i.tags||[]).includes(t)}">${esc(t)}</button>`).join("")}</div>
+ <textarea class="note" data-n="${l}" placeholder="Votre note : angle, citation à vérifier, idée de post…">${esc(i.note||"")}</textarea>
+ <div class="acts"><button data-post="${l}">Fiche post</button><button class="alt" data-cite="${l}">Copier la source</button></div></div>`}
+document.addEventListener("input",e=>{const n=e.target.dataset&&e.target.dataset.n;if(n){const it=find(n);if(it){it.note=e.target.value;persist()}}});
 document.addEventListener("click",e=>{const c=e.target.closest("button");if(!c)return;
  if(c.id==="tu"||c.id==="ts"){tab=c.id==="ts"?"s":"u";$("#tu").setAttribute("aria-selected",tab==="u");$("#ts").setAttribute("aria-selected",tab==="s");render();scrollTo(0,0)}
  else if(c.dataset.t!==undefined){theme=c.dataset.t||null;chips();render()}
  else if(c.dataset.k!==undefined){kind=c.dataset.k||null;chips();render()}
+ else if(c.dataset.f!==undefined){tagF=c.dataset.f||null;render()}
+ else if(c.dataset.g){const it=find(c.dataset.g);if(it){it.tags=it.tags||[];const k=it.tags.indexOf(c.dataset.tag);k>=0?it.tags.splice(k,1):it.tags.push(c.dataset.tag);persist();render()}}
+ else if(c.dataset.post){const it=find(c.dataset.post);if(it){$("#pt").value=draft(it);$("#ov").classList.add("on")}}
+ else if(c.dataset.cite){const it=find(c.dataset.cite);if(it)copy(cite(it))}
+ else if(c.id==="ptCp")copy($("#pt").value)
+ else if(c.id==="ptX")$("#ov").classList.remove("on")
+ else if(c.id==="exCp")copy(exportMd())
+ else if(c.id==="exMd"){const b=new Blob([exportMd()],{type:"text/markdown"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="jaccuse-notes.md";document.body.appendChild(a);a.click();a.remove()}
  else if(c.dataset.l){const l=c.dataset.l,k=saved.findIndex(s=>s.link===l);
-  if(k>=0)saved.splice(k,1);else{const it=DATA.items.find(i=>i.link===l);if(it)saved.unshift(it)}
+  if(k>=0)saved.splice(k,1);else{const it=DATA.items.find(i=>i.link===l);if(it)saved.unshift({...it,note:"",tags:[]})}
   persist();render()}});
 $("#q").addEventListener("input",e=>{q=e.target.value.trim();render()});
 fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{DATA=d;chips();render();
